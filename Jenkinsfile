@@ -10,8 +10,8 @@ pipeline {
 
         stage('Checkout') {
             steps {
-                git branch: 'main',
-                    url: 'https://github.com/yourusername/cicd-project.git'
+                git branch: 'master',
+                    url: 'https://github.com/AKASH-GIT-2998/my-cicd-project.git'
             }
         }
 
@@ -25,9 +25,9 @@ pipeline {
         stage('Push to Docker Hub') {
             steps {
                 withCredentials([usernamePassword(
-                    credentialsId: 'dockerhub-creds',
-                    usernameVariable: 'DOCKER_USER',
-                    passwordVariable: 'DOCKER_PASS'
+                    credentialsId: 'b97860e0-84c6-411e-be9e-7d0a5953c213',
+                    usernameVariable: 'akash290698',
+                    passwordVariable: 'Akash@123.'
                 )]) {
                     sh "echo $DOCKER_PASS | docker login -u $DOCKER_USER --password-stdin"
                     sh "docker push ${IMAGE_NAME}:${IMAGE_TAG}"
