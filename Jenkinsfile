@@ -4,6 +4,11 @@ pipeline {
         label 'ci-agent'
     }
 
+    tools {
+        git 'Default'
+        dockerTool 'Docker'
+    }
+
     environment {
         IMAGE_NAME = 'akash290698/cicd-app'
         IMAGE_TAG  = "${BUILD_NUMBER}"
@@ -13,18 +18,27 @@ pipeline {
 
         stage('Checkout') {
             steps {
-                checkout scm
+                git(
+                    branch: 'master',
+                    credentialsId: '48c4a85a-a356-4846-93e8-3878472bab61',
+                    url: 'https://github.com/AKASH-GIT-2998/my-cicd-project.git'
+                )
             }
         }
 
-        stage('Verify Tools') {
+        stage('Verify Git and Docker') {
             steps {
                 sh '''
-                    echo "Checking tools..."
+                    echo "===== Git ====="
+                    which git
                     git --version
+
+                    echo "===== Docker ====="
+                    which docker
                     docker --version
+
+                    echo "===== Docker Access ====="
                     docker info
-                    kubectl version --client
                 '''
             }
         }
@@ -32,9 +46,10 @@ pipeline {
         stage('Build Docker Image') {
             steps {
                 sh '''
-                    echo "Building Docker image..."
-                    docker build -t ${IMAGE_NAME}:${IMAGE_TAG} .
-                    docker tag ${IMAGE_NAME}:${IMAGE_TAG} ${IMAGE_NAME}:latest
+                    sudo docker build \
+                        -t ${IMAGE_NAME}:${IMAGE_TAG} \
+                        -t ${IMAGE_NAME}:latest \
+                        .
                 '''
             }
         }
@@ -43,24 +58,20 @@ pipeline {
             steps {
                 withCredentials([
                     usernamePassword(
-                        credentialsId: 'dockerhub-credentials',
-                        usernameVariable: 'DOCKER_USERNAME',
-                        passwordVariable: 'DOCKER_PASSWORD'
+                        credentialsId: 'b97860e0-84c6-411e-be9e-7d0a5953c213',
+                        usernameVariable: 'akash290698',
+                        passwordVariable: 'Akash@123.'
                     )
                 ]) {
                     sh '''
-                        echo "Logging in to Docker Hub..."
-
                         echo "$DOCKER_PASSWORD" | docker login \
                             -u "$DOCKER_USERNAME" \
                             --password-stdin
 
-                        echo "Pushing Docker image..."
+                        sudo docker push ${IMAGE_NAME}:${IMAGE_TAG}
+                        sudo docker push ${IMAGE_NAME}:latest
 
-                        docker push ${IMAGE_NAME}:${IMAGE_TAG}
-                        docker push ${IMAGE_NAME}:latest
-
-                        docker logout
+                        sudo docker logout
                     '''
                 }
             }
@@ -69,8 +80,6 @@ pipeline {
         stage('Deploy to Kubernetes') {
             steps {
                 sh '''
-                    echo "Deploying application to Kubernetes..."
-
                     kubectl apply -f deployment.yaml
                     kubectl apply -f service.yaml
 
@@ -83,17 +92,11 @@ pipeline {
     post {
         success {
             echo "Pipeline completed successfully!"
-            echo "Docker Image: ${IMAGE_NAME}:${IMAGE_TAG}"
+            echo "Image: ${IMAGE_NAME}:${IMAGE_TAG}"
         }
 
         failure {
             echo "Pipeline failed at build #${BUILD_NUMBER}"
-        }
-
-        always {
-            sh '''
-                docker image prune -f || true
-            '''
         }
     }
 }
