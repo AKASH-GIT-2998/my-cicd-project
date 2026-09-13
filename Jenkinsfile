@@ -1,8 +1,12 @@
+```groovy
 pipeline {
-    agent { label 'ci-agent' }
+
+    agent {
+        label 'ci-agent'
+    }
 
     environment {
-        IMAGE_NAME = "yourname/cicd-app"
+        IMAGE_NAME = 'akash290698/cicd-app'
         IMAGE_TAG  = "${BUILD_NUMBER}"
     }
 
@@ -10,50 +14,88 @@ pipeline {
 
         stage('Checkout') {
             steps {
-                git branch: 'master',
-                    url: 'https://github.com/AKASH-GIT-2998/my-cicd-project.git'
+                checkout scm
+            }
+        }
+
+        stage('Verify Tools') {
+            steps {
+                sh '''
+                    echo "Checking tools..."
+                    git --version
+                    docker --version
+                    docker info
+                    kubectl version --client
+                '''
             }
         }
 
         stage('Build Docker Image') {
             steps {
-                sh "docker build -t ${IMAGE_NAME}:${IMAGE_TAG} ."
-                sh "docker tag ${IMAGE_NAME}:${IMAGE_TAG} ${IMAGE_NAME}:latest"
+                sh '''
+                    echo "Building Docker image..."
+                    docker build -t ${IMAGE_NAME}:${IMAGE_TAG} .
+                    docker tag ${IMAGE_NAME}:${IMAGE_TAG} ${IMAGE_NAME}:latest
+                '''
             }
         }
 
         stage('Push to Docker Hub') {
             steps {
-                withCredentials([usernamePassword(
-                    credentialsId: 'b97860e0-84c6-411e-be9e-7d0a5953c213',
-                    usernameVariable: 'akash290698',
-                    passwordVariable: 'Akash@123.'
-                )]) {
-                    sh "echo $DOCKER_PASS | docker login -u $DOCKER_USER --password-stdin"
-                    sh "docker push ${IMAGE_NAME}:${IMAGE_TAG}"
-                    sh "docker push ${IMAGE_NAME}:latest"
+                withCredentials([
+                    usernamePassword(
+                        credentialsId: 'dockerhub-credentials',
+                        usernameVariable: 'DOCKER_USERNAME',
+                        passwordVariable: 'DOCKER_PASSWORD'
+                    )
+                ]) {
+                    sh '''
+                        echo "Logging in to Docker Hub..."
+
+                        echo "$DOCKER_PASSWORD" | docker login \
+                            -u "$DOCKER_USERNAME" \
+                            --password-stdin
+
+                        echo "Pushing Docker image..."
+
+                        docker push ${IMAGE_NAME}:${IMAGE_TAG}
+                        docker push ${IMAGE_NAME}:latest
+
+                        docker logout
+                    '''
                 }
             }
         }
 
         stage('Deploy to Kubernetes') {
             steps {
-                sh """
-                ssh -o StrictHostKeyChecking=no ubuntu@<K8S_NODE_IP> '
-                    kubectl set image deployment/cicd-app cicd-app=${IMAGE_NAME}:${IMAGE_TAG}
+                sh '''
+                    echo "Deploying application to Kubernetes..."
+
+                    kubectl apply -f deployment.yaml
+                    kubectl apply -f service.yaml
+
                     kubectl rollout status deployment/cicd-app
-                '
-                """
+                '''
             }
         }
     }
 
     post {
         success {
-            echo "PRT - CI/CD Completed Successfully - Build #${BUILD_NUMBER}"
+            echo "Pipeline completed successfully!"
+            echo "Docker Image: ${IMAGE_NAME}:${IMAGE_TAG}"
         }
+
         failure {
             echo "Pipeline failed at build #${BUILD_NUMBER}"
         }
+
+        always {
+            sh '''
+                docker image prune -f || true
+            '''
+        }
     }
 }
+```
